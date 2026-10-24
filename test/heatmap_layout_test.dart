@@ -83,5 +83,39 @@ void main() {
       expect(mixed.cellHeight, 20); // derived: 40 / 2 rows
       expect(mixed.contentSize, const Size(40, 40));
     });
+
+    test('an unbounded size on the explicit-cellWidth axis is fine — it is never read', () {
+      const layout = HeatmapLayout(
+        rowCount: 2,
+        columnCount: 2,
+        spacing: 0,
+        size: Size(double.infinity, 40),
+        cellWidth: 20,
+      );
+      expect(layout.cellWidth, 20);
+      expect(layout.cellHeight, 20);
+    });
+  });
+
+  group('HeatmapLayout with an unbounded size and no explicit cell size', () {
+    test('cellWidth asserts with a clear message instead of returning infinity', () {
+      const layout = HeatmapLayout(
+        rowCount: 2,
+        columnCount: 2,
+        spacing: 0,
+        size: Size(double.infinity, 40),
+      );
+      expect(() => layout.cellWidth, throwsA(isA<AssertionError>()));
+    });
+
+    test('cellHeight asserts with a clear message instead of returning infinity', () {
+      const layout = HeatmapLayout(
+        rowCount: 2,
+        columnCount: 2,
+        spacing: 0,
+        size: Size(40, double.infinity),
+      );
+      expect(() => layout.cellHeight, throwsA(isA<AssertionError>()));
+    });
   });
 }

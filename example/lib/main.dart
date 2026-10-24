@@ -43,7 +43,7 @@ final _entries = [
       (_) => const CustomColorAndShapeExample()),
   _ExampleEntry('5. House electricity usage', '4 rooms x 12 months of dummy kWh data — no dates involved',
       (_) => const HouseElectricityUsageExample()),
-  _ExampleEntry('6. Scroll-driven zoom', 'Cells shrink on scroll to reveal more columns, via a scoped rebuild',
+  _ExampleEntry('6. Sticky heatmap, shrinks as you scroll', 'A shrinking header next to a growing list, never hiding rows',
       (_) => const ScrollDrivenAnimationExample()),
   _ExampleEntry('7. Horizontally scrollable, frozen labels', 'Fixed cell size + ordinary scroll view; row labels stay put',
       (_) => const HorizontallyScrollableCalendarExample()),

@@ -35,15 +35,31 @@ class HeatmapLayout {
   final double? _explicitCellWidth;
   final double? _explicitCellHeight;
 
-  double get cellWidth =>
-      _explicitCellWidth ??
-      (columnCount == 0 || _size == null
-          ? 0
-          : (_size.width - spacing * (columnCount - 1)) / columnCount);
+  double get cellWidth {
+    if (_explicitCellWidth != null) return _explicitCellWidth;
+    if (columnCount == 0 || _size == null) return 0;
+    assert(
+      _size.width.isFinite,
+      'HeatmapLayout was given an unbounded width and no explicit cellWidth, '
+      'so it has no way to size columns — either wrap Heatmap in something '
+      'that gives it a bounded width (SizedBox, Expanded, AspectRatio, ...) '
+      'or pass cellWidth for a fixed column size.',
+    );
+    return (_size.width - spacing * (columnCount - 1)) / columnCount;
+  }
 
-  double get cellHeight =>
-      _explicitCellHeight ??
-      (rowCount == 0 || _size == null ? 0 : (_size.height - spacing * (rowCount - 1)) / rowCount);
+  double get cellHeight {
+    if (_explicitCellHeight != null) return _explicitCellHeight;
+    if (rowCount == 0 || _size == null) return 0;
+    assert(
+      _size.height.isFinite,
+      'HeatmapLayout was given an unbounded height and no explicit '
+      'cellHeight, so it has no way to size rows — either wrap Heatmap in '
+      'something that gives it a bounded height (SizedBox, Expanded, '
+      'AspectRatio, ...) or pass cellHeight for a fixed row size.',
+    );
+    return (_size.height - spacing * (rowCount - 1)) / rowCount;
+  }
 
   /// The grid's actual size — equal to the given [size] when cell size is
   /// derived, or larger than it when a fixed [cellWidth]/[cellHeight]

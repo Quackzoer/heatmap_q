@@ -252,19 +252,43 @@ no virtualization (see "Non-goals") — see example 7 for the full pattern,
 including a frozen (non-scrolling) row-label sidebar next to it.
 
 A distinct case fixed cell size doesn't cover: *animating* the cell size
-itself (zooming out on scroll to reveal more columns — example 6). That's
-not a paint-only change like color or corner radius: `contentSize` changes
-every frame, so `CustomPaint`'s allocated size has to change too, which
-`repaint: Listenable` fundamentally can't do (it only ever triggers a
-repaint of an *already-allocated* canvas). A rebuild is unavoidable here.
-The fix isn't to avoid the rebuild, it's to scope it: wrap just the
-`Heatmap` (inside its own `SingleChildScrollView`, inside a fixed-size box)
-in a `ValueListenableBuilder`, so only that narrow subtree re-lays-out on
-every scroll tick — the enclosing page, list, and scroll listener are never
-rebuilt. This is the actual resolution to the original "cell resizing was
-dropping FPS" problem from the top of this plan: the mistake wasn't using a
-rebuild for a layout-affecting property, it was not scoping that rebuild
-narrowly enough.
+itself (a shrinking "sticky" heatmap header above a growing list on scroll —
+example 6). That's not a paint-only change like color or corner radius:
+`contentSize` changes every frame, so `CustomPaint`'s allocated size has to
+change too, which `repaint: Listenable` fundamentally can't do (it only ever
+triggers a repaint of an *already-allocated* canvas). A rebuild is
+unavoidable here. The fix isn't to avoid the rebuild, it's to scope it: wrap
+just the `Heatmap` (inside its own `SingleChildScrollView`, inside an
+animated-height box) in a `ValueListenableBuilder`, so only that narrow
+subtree re-lays-out on every scroll tick — the enclosing page, list, and
+scroll listener are never rebuilt. This is the actual resolution to the
+original "cell resizing was dropping FPS" problem from the top of this
+plan: the mistake wasn't using a rebuild for a layout-affecting property,
+it was not scoping that rebuild narrowly enough.
+
+**Sizing invariant, learned the hard way:** the first version of example 6
+animated *both* `cellWidth` and `cellHeight` together inside an
+independently fixed-height box. At the larger end of that animation, the 7
+rows' actual content height exceeded the box, and the scroll view's
+non-scrolling cross axis silently clipped whatever didn't fit — rows
+appeared to pop in and out of existence as the user scrolled, since the
+box's height and the grid's content height could independently disagree.
+Fixed by never fixing both ends of the same relationship: cell **width**
+stays explicit (so ~3 years of columns overflow and need horizontal
+scrolling, independent of anything vertical), cell **height** is left
+derived (`cellHeight` omitted, so `HeatmapLayout` computes it as `box
+height / rowCount`) — whatever height the animation gives the box, all 7
+rows fit it exactly, by construction, never fewer. The general rule this
+generalizes to: unless a host deliberately caps `Heatmap`'s height with
+something like a `SizedBox` shorter than its content (which is a legitimate
+choice — that's what fixed cell size *is for*, to allow deliberate
+scrollable overflow), `Heatmap` should never end up silently hiding rows.
+`HeatmapLayout.cellWidth`/`cellHeight` now assert with a clear message
+(instead of silently computing infinity, which previously surfaced as a
+much more confusing low-level Flutter rendering crash) if derivation is
+attempted against an unbounded size with no explicit cell size given — that
+combination has no sensible answer, so it fails loudly in debug builds
+instead of misbehaving.
 
 ### 9. Row/column labels
 
@@ -397,18 +421,35 @@ Heatmap<Task>(
 
 ### Example 4 — Animating cell size from scroll, without jank
 
+**Correction:** this snippet, as originally sketched here, doesn't actually
+work — `repaint` only triggers a repaint of an *already-allocated* canvas,
+it can't resize it, and cell size is a layout property (`contentSize`
+changes with it). Driving `cellSize` through `repaint` alone would just
+repaint at the old size forever. See "Cell sizing" (section 8) and the
+sizing invariant below it for what actually ships: a `ValueListenableBuilder`
+scoped tightly around the `Heatmap`, so the *rebuild* this genuinely
+requires stays cheap, plus deriving one axis (`cellHeight`) from the box
+instead of animating both axes independently — which is also what avoids
+the row-clipping bug that motivated writing that invariant down. Example 6
+is the real, working version of this idea.
+
 ```dart
-final cellSize = ValueNotifier<double>(14);
+final heatmapHeight = ValueNotifier<double>(150);
 
 NotificationListener<ScrollNotification>(
   onNotification: (n) {
-    cellSize.value = (14 - n.metrics.pixels / 40).clamp(8, 14);
+    final t = (n.metrics.pixels / n.metrics.maxScrollExtent).clamp(0.0, 1.0);
+    heatmapHeight.value = 150 - t * (150 - 70);
     return false; // no setState anywhere in this path
   },
-  child: Heatmap<int>(
-    grid: grid,
-    colorResolver: resolver,
-    repaint: cellSize, // painter reads cellSize.value inside paint()
+  child: ValueListenableBuilder<double>(
+    valueListenable: heatmapHeight,
+    builder: (context, height, _) => SizedBox(
+      height: height,
+      child: Heatmap<int>(grid: grid, colorResolver: resolver, cellWidth: 12),
+      // cellHeight omitted on purpose — derived as height / rowCount, so
+      // rows can never be clipped regardless of what height animates to.
+    ),
   ),
 );
 ```
